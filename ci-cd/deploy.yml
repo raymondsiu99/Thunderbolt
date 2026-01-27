@@ -1,0 +1,63 @@
+name: Deploy Thunderbolt Dispatch
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: 'thunderbolt-dispatch'    # set this to your application's name
+  NODE_VERSION: '18.x'                # set this to the node version to use
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    # Build Frontend (React Native Web)
+    - name: Set up Node.js for Frontend
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package.json
+
+    - name: Install Frontend Dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Build Frontend Web
+      working-directory: ./frontend
+      run: npx expo export:web
+      # Output is in frontend/web-build
+
+    # Build Backend
+    - name: Set up Node.js for Backend
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: backend/package.json
+
+    - name: Install Backend Dependencies
+      working-directory: ./backend
+      run: npm ci
+
+    - name: Build Backend
+      working-directory: ./backend
+      run: npm run build
+
+    # Bundle Frontend into Backend Public Folder
+    - name: Bundle Frontend
+      run: |
+        mkdir -p backend/client
+        cp -r frontend/web-build/* backend/client/
+
+    # Deploy to Azure Web App
+    - name: 'Deploy to Azure Web App'
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ./backend
