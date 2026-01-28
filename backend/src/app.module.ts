@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { JobsModule } from './jobs/jobs.module';
 import { AssetsModule } from './assets/assets.module';
 import { IntegrationModule } from './integration/integration.module';
+import { AdminModule } from './admin/admin.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -60,6 +61,7 @@ import { join } from 'path';
         JobsModule,
         AssetsModule,
         IntegrationModule,
+        AdminModule,
     ],
 })
 export class AppModule { }

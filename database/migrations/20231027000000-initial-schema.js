@@ -2,6 +2,9 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
+    // Create TBS schema
+    await queryInterface.sequelize.query('IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = \'tbs\') BEGIN EXEC(\'CREATE SCHEMA tbs\') END');
+
     // Users
     await queryInterface.createTable('Users', {
       id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
@@ -11,7 +14,7 @@ module.exports = {
       email: { type: Sequelize.STRING, allowNull: false, unique: true },
       created_at: { type: Sequelize.DATE, defaultValue: Sequelize.fn('GETDATE') },
       updated_at: { type: Sequelize.DATE, defaultValue: Sequelize.fn('GETDATE') }
-    });
+    }, { schema: 'tbs' });
 
     // Assets
     await queryInterface.createTable('Assets', {
@@ -22,7 +25,7 @@ module.exports = {
       availability: { type: Sequelize.BOOLEAN, defaultValue: true },
       created_at: { type: Sequelize.DATE, defaultValue: Sequelize.fn('GETDATE') },
       updated_at: { type: Sequelize.DATE, defaultValue: Sequelize.fn('GETDATE') }
-    });
+    }, { schema: 'tbs' });
 
     // Jobs
     await queryInterface.createTable('Jobs', {
@@ -40,19 +43,19 @@ module.exports = {
       ticket_pdf_url: { type: Sequelize.STRING },
       driver_id: {
         type: Sequelize.INTEGER,
-        references: { model: 'Users', key: 'id' },
+        references: { model: { tableName: 'Users', schema: 'tbs' }, key: 'id' },
         onUpdate: 'CASCADE',
         onDelete: 'SET NULL'
       },
       approver_id: {
         type: Sequelize.INTEGER,
-        references: { model: 'Users', key: 'id' },
+        references: { model: { tableName: 'Users', schema: 'tbs' }, key: 'id' },
         onUpdate: 'CASCADE',
         onDelete: 'SET NULL'
       },
       created_at: { type: Sequelize.DATE, defaultValue: Sequelize.fn('GETDATE') },
       updated_at: { type: Sequelize.DATE, defaultValue: Sequelize.fn('GETDATE') }
-    });
+    }, { schema: 'tbs' });
 
     // Audits
     await queryInterface.createTable('Audits', {
@@ -60,19 +63,20 @@ module.exports = {
       action: { type: Sequelize.STRING, allowNull: false },
       user_id: {
         type: Sequelize.INTEGER,
-        references: { model: 'Users', key: 'id' },
+        references: { model: { tableName: 'Users', schema: 'tbs' }, key: 'id' },
         onUpdate: 'CASCADE',
         onDelete: 'SET NULL'
       },
       timestamp: { type: Sequelize.DATE, defaultValue: Sequelize.fn('GETDATE') },
       details: { type: Sequelize.TEXT }
-    });
+    }, { schema: 'tbs' });
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.dropTable('Audits');
-    await queryInterface.dropTable('Jobs');
-    await queryInterface.dropTable('Assets');
-    await queryInterface.dropTable('Users');
+    await queryInterface.dropTable({ tableName: 'Audits', schema: 'tbs' });
+    await queryInterface.dropTable({ tableName: 'Jobs', schema: 'tbs' });
+    await queryInterface.dropTable({ tableName: 'Assets', schema: 'tbs' });
+    await queryInterface.dropTable({ tableName: 'Users', schema: 'tbs' });
+    await queryInterface.sequelize.query('DROP SCHEMA IF EXISTS tbs');
   }
 };

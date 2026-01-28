@@ -1,6 +1,6 @@
 import { Column, Model, Table, DataType, HasMany } from 'sequelize-typescript';
 
-@Table({ tableName: 'Users' })
+@Table({ tableName: 'Users', schema: 'tbs' })
 export class User extends Model {
     @Column({ primaryKey: true, autoIncrement: true })
     id: number;

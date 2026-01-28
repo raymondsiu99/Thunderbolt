@@ -1,29 +1,92 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { colors, typography, spacing, shadows, borderRadius } from '../theme';
+import { adminAPI } from '../services/api';
 
-const STATS = [
-    { label: 'Total Jobs', value: '1,234', color: colors.primary, icon: '📋' },
-    { label: 'Active Drivers', value: '45', color: colors.secondary, icon: '🚛' },
-    { label: 'Completed Today', value: '28', color: colors.success, icon: '✅' },
-    { label: 'Revenue (MTD)', value: '$125K', color: colors.accent, icon: '💰' },
-];
+interface Stats {
+    totalJobs: number;
+    activeDrivers: number;
+    completedToday: number;
+    monthlyRevenue: number;
+}
 
-const QUICK_ACTIONS = [
-    { title: 'Create Job', icon: '➕', color: colors.primary },
-    { title: 'Manage Drivers', icon: '👥', color: colors.secondary },
-    { title: 'View Reports', icon: '📊', color: colors.info },
-    { title: 'Settings', icon: '⚙️', color: colors.textSecondary },
-];
+interface Activity {
+    id: number;
+    action: string;
+    details: string;
+    timestamp: string;
+    user?: {
+        username: string;
+    };
+}
 
-const RECENT_ACTIVITY = [
-    { id: 1, action: 'New job created', details: 'Job #1234 - Site A', time: '5 min ago' },
-    { id: 2, action: 'Job completed', details: 'Job #1233 by Driver John', time: '15 min ago' },
-    { id: 3, action: 'Driver assigned', details: 'Driver Mike → Job #1235', time: '1 hour ago' },
-    { id: 4, action: 'Payment received', details: 'Invoice #5678 - $2,500', time: '2 hours ago' },
-];
+export default function AdminDashboard({ navigation }: any) {
+    const [stats, setStats] = useState<Stats | null>(null);
+    const [activities, setActivities] = useState<Activity[]>([]);
+    const [loading, setLoading] = useState(true);
 
-export default function AdminDashboard() {
+    useEffect(() => {
+        loadDashboardData();
+    }, []);
+
+    const loadDashboardData = async () => {
+        try {
+            setLoading(true);
+            const [statsData, activityData] = await Promise.all([
+                adminAPI.getStats(),
+                adminAPI.getActivityLogs(5),
+            ]);
+            setStats(statsData);
+            setActivities(activityData);
+        } catch (error) {
+            console.error('Failed to load dashboard data:', error);
+            Alert.alert('Error', 'Failed to load dashboard data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatCurrency = (amount: number) => {
+        return `$${(amount / 1000).toFixed(0)}K`;
+    };
+
+    const formatTimeAgo = (timestamp: string) => {
+        const now = new Date();
+        const then = new Date(timestamp);
+        const diffMs = now.getTime() - then.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins} min ago`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    };
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Loading dashboard...</Text>
+            </View>
+        );
+    }
+
+    const STATS = stats ? [
+        { label: 'Total Jobs', value: stats.totalJobs.toString(), color: colors.primary, icon: '📋' },
+        { label: 'Active Drivers', value: stats.activeDrivers.toString(), color: colors.secondary, icon: '🚛' },
+        { label: 'Completed Today', value: stats.completedToday.toString(), color: colors.success, icon: '✅' },
+        { label: 'Revenue (MTD)', value: formatCurrency(stats.monthlyRevenue), color: colors.accent, icon: '💰' },
+    ] : [];
+
+    const QUICK_ACTIONS = [
+        { title: 'Create Job', icon: '➕', color: colors.primary, screen: 'OrderEntry' },
+        { title: 'Manage Drivers', icon: '👥', color: colors.secondary, screen: 'ManageDrivers' },
+        { title: 'View Reports', icon: '📊', color: colors.info, screen: 'Reports' },
+        { title: 'Settings', icon: '⚙️', color: colors.textSecondary, screen: 'Settings' },
+    ];
+
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             {/* Header */}
@@ -32,7 +95,9 @@ export default function AdminDashboard() {
                     <Text style={styles.greeting}>Welcome Back</Text>
                     <Text style={styles.adminName}>Admin Dashboard</Text>
                 </View>
-                <Text style={styles.date}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</Text>
+                <TouchableOpacity onPress={loadDashboardData}>
+                    <Text style={styles.refreshButton}>🔄</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Stats Grid */}
@@ -57,6 +122,13 @@ export default function AdminDashboard() {
                             key={index}
                             style={styles.actionCard}
                             activeOpacity={0.7}
+                            onPress={() => {
+                                if (action.screen && navigation) {
+                                    navigation.navigate(action.screen);
+                                } else {
+                                    Alert.alert('Coming Soon', `${action.title} feature is under development`);
+                                }
+                            }}
                         >
                             <View style={[styles.actionIcon, { backgroundColor: action.color }]}>
                                 <Text style={styles.actionIconText}>{action.icon}</Text>
@@ -71,22 +143,29 @@ export default function AdminDashboard() {
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Recent Activity</Text>
-                    <TouchableOpacity>
-                        <Text style={styles.viewAllText}>View All →</Text>
+                    <TouchableOpacity onPress={loadDashboardData}>
+                        <Text style={styles.viewAllText}>Refresh →</Text>
                     </TouchableOpacity>
                 </View>
                 
                 <View style={styles.activityContainer}>
-                    {RECENT_ACTIVITY.map((activity) => (
-                        <View key={activity.id} style={styles.activityItem}>
-                            <View style={styles.activityIndicator} />
-                            <View style={styles.activityContent}>
-                                <Text style={styles.activityAction}>{activity.action}</Text>
-                                <Text style={styles.activityDetails}>{activity.details}</Text>
-                                <Text style={styles.activityTime}>{activity.time}</Text>
+                    {activities.length > 0 ? (
+                        activities.map((activity) => (
+                            <View key={activity.id} style={styles.activityItem}>
+                                <View style={styles.activityIndicator} />
+                                <View style={styles.activityContent}>
+                                    <Text style={styles.activityAction}>{activity.action}</Text>
+                                    <Text style={styles.activityDetails}>{activity.details}</Text>
+                                    <Text style={styles.activityTime}>
+                                        {formatTimeAgo(activity.timestamp)}
+                                        {activity.user && ` • ${activity.user.username}`}
+                                    </Text>
+                                </View>
                             </View>
-                        </View>
-                    ))}
+                        ))
+                    ) : (
+                        <Text style={styles.noDataText}>No recent activity</Text>
+                    )}
                 </View>
             </View>
 
@@ -111,6 +190,17 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+    },
+    loadingText: {
+        ...typography.body,
+        color: colors.textSecondary,
+        marginTop: spacing.md,
+    },
     header: {
         backgroundColor: colors.primary,
         paddingTop: spacing.xxl,
@@ -133,9 +223,8 @@ const styles = StyleSheet.create({
         color: colors.textOnPrimary,
         fontWeight: '700',
     },
-    date: {
-        ...typography.bodySmall,
-        color: colors.textOnPrimary,
+    refreshButton: {
+        fontSize: 24,
     },
     statsGrid: {
         flexDirection: 'row',
@@ -259,6 +348,12 @@ const styles = StyleSheet.create({
     activityTime: {
         ...typography.caption,
         color: colors.textLight,
+    },
+    noDataText: {
+        ...typography.body,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        paddingVertical: spacing.lg,
     },
     infoSection: {
         marginHorizontal: spacing.lg,

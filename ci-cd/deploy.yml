@@ -54,6 +54,13 @@ jobs:
         mkdir -p backend/client
         cp -r frontend/web-build/* backend/client/
 
+    # Deploy Database to Azure SQL
+    - name: 'Azure SQL Deploy'
+      uses: azure/sql-action@v2.2
+      with:
+        connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+        path: './database/schema.sql'
+
     # Deploy to Azure Web App
     - name: 'Deploy to Azure Web App'
       uses: azure/webapps-deploy@v2
