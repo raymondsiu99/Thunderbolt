@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -18,15 +18,42 @@ import { join } from 'path';
             rootPath: join(__dirname, '..', 'client'),
             exclude: ['/api/(.*)'],
         }),
-        SequelizeModule.forRoot({
-            dialect: 'mssql',
-            host: process.env.DB_HOST || 'localhost',
-            port: parseInt(process.env.DB_PORT || '1433'),
-            username: process.env.DB_USER || 'sa',
-            password: process.env.DB_PASSWORD || 'Password123!',
-            database: process.env.DB_NAME || 'ThunderboltDB',
-            autoLoadModels: true,
-            synchronize: false, // We use migrations
+        SequelizeModule.forRootAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: (config: ConfigService) => {
+                const isTrusted = config.get<string>('DB_TRUSTED_CONNECTION') === 'true';
+                console.log('=== DATABASE CONFIGURATION ===');
+                console.log('ENV CHECK:', process.env.DB_TRUSTED_CONNECTION);
+                console.log('DB Config:', {
+                    host: config.get<string>('DB_HOST'),
+                    isTrusted,
+                    username: isTrusted ? undefined : (config.get<string>('DB_USER') || 'sa'),
+                });
+                console.log('===============================');
+
+                return {
+                    dialect: 'mssql',
+                    host: config.get<string>('DB_HOST') || 'localhost',
+                    port: parseInt(config.get<string>('DB_PORT') || '1433'),
+                    database: config.get<string>('DB_NAME') || 'ThunderboltDB',
+                    dialectOptions: {
+                        options: {
+                            encrypt: false,
+                            trustServerCertificate: true,
+                            trustedConnection: isTrusted,
+                            instanceName: config.get<string>('DB_INSTANCE'),
+                        },
+                        authentication: isTrusted ? {
+                            type: 'default'
+                        } : undefined,
+                    },
+                    username: isTrusted ? undefined : (config.get<string>('DB_USER') || 'sa'),
+                    password: isTrusted ? undefined : (config.get<string>('DB_PASSWORD') || 'Password123!'),
+                    autoLoadModels: true,
+                    synchronize: false,
+                };
+            },
         }),
         AuthModule,
         UsersModule,
